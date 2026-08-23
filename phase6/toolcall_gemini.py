@@ -1,39 +1,51 @@
-from google import genai
-from config import GEMINI_API_KEY
-from tools.temperature_tool import get_temperature
-from google.genai import types
 import asyncio
-from tools_registry import tool_registry
 import inspect
+
+from google import genai
+from google.genai import types
+
+from config import GEMINI_API_KEY
+from tools_registry import tool_registry
+from models.model_output import AgentResponse
+
+
+# ============================================================
+# Tool Schemas
+# ============================================================
 
 temperature_tool = {
     "name": "get_temperature",
-    # "type": "function",
-    "description": "given a city name it will be able to return its temperature",
+    "description": "Given a city name, return its current temperature.",
     "parameters": {
         "type": "object",
         "properties": {
             "city": {
                 "type": "string",
-                "description": "The city whose temperature to be retrieved",
+                "description": "The city whose temperature should be retrieved.",
             }
         },
         "required": ["city"],
     },
 }
 
+
 calculator_tool = {
     "name": "calculator",
-    # "type": "function",
-    "description": "responsible for performing arithmetic operations.",
+    "description": "Perform arithmetic operations on two numbers.",
     "parameters": {
         "type": "object",
         "properties": {
-            "a": {"description": "first number in the operation", "type": "number"},
-            "b": {"description": "second number in the operation", "type": "number"},
+            "a": {
+                "type": "number",
+                "description": "The first number.",
+            },
+            "b": {
+                "type": "number",
+                "description": "The second number.",
+            },
             "operation": {
-                "description": "The arithmetic operation to perform.",
                 "type": "string",
+                "description": "The arithmetic operation to perform.",
                 "enum": [
                     "addition",
                     "subtraction",
@@ -46,75 +58,210 @@ calculator_tool = {
     },
 }
 
+
+# ============================================================
+# Gemini Client
+# ============================================================
+
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-tools = types.Tool(function_declarations=[temperature_tool, calculator_tool])
-config = types.GenerateContentConfig(tools=[tools])
-forced_tool_config = types.GenerateContentConfig(
-    tools=[tools],
-    tool_config=types.ToolConfig(
-        function_calling_config=types.FunctionCallingConfig(
-            mode="ANY",
-            allowed_function_names=["get_temperature"],
-        )
-    ),
+
+# ============================================================
+# Tool Configuration
+# ============================================================
+
+tools_declaration = types.Tool(
+    function_declarations=[
+        temperature_tool,
+        calculator_tool,
+    ]
 )
 
 
+# Configuration used while the agent is deciding/executing tools
+loop_config = types.GenerateContentConfig(
+    tools=[tools_declaration]
+)
+
+
+# Configuration used for the final structured response
+structured_final_config = types.GenerateContentConfig(
+    response_mime_type="application/json",
+    response_schema=AgentResponse,
+)
+
+
+# ============================================================
+# Tool Execution
+# ============================================================
+
 async def execute_tool_call(call):
+    """
+    Resolve, validate, execute, and validate the output
+    of a single tool call.
+    """
+
+    # 1. Find tool metadata from registry
     tool = tool_registry[call.name]
+
+    # 2. Validate Gemini's arguments
     validated_input = tool["input_model"](**call.args)
 
+    # 3. Execute the actual tool
     result = tool["function"](validated_input)
+
+    # 4. Support both sync and async tools
     if inspect.isawaitable(result):
         result = await result
-    validated_output= tool['output_model'].model_validate(result)
+
+    # 5. Validate the tool output
+    validated_output = tool["output_model"].model_validate(result)
+
     return validated_output
 
 
+# ============================================================
+# Agent
+# ============================================================
+
 async def main():
-    response = client.models.generate_content(
+
+    prompt = "What's the temperature in Hyderabad, and what is 125 * 48?"
+
+    # Maximum number of tool-execution rounds allowed
+    MAX_ITERATIONS = 5
+
+    # --------------------------------------------------------
+    # 1. Create Gemini chat session
+    # --------------------------------------------------------
+
+    chat = client.chats.create(
         model="gemini-3.5-flash-lite",
-        contents="What's the temperature in Hyderabad, and what is 125 * 48?",
-        config=config,
-    )
-    function_calls = response.function_calls
-    # print(function_calls)
-    results = await asyncio.gather(
-        *(execute_tool_call(call) for call in function_calls)
+        config=loop_config,
     )
 
-    function_responses = [
-        types.Part.from_function_response(
-            name=call.name,
-            # Universal check: extracts dictionary from Pydantic model or wraps primitive floats/ints
-            response=result.model_dump(),
+    print(
+        f"🤖 Starting agent for prompt:\n"
+        f"   {prompt}\n"
+    )
+
+    # --------------------------------------------------------
+    # 2. Initial model request
+    # --------------------------------------------------------
+
+    response = chat.send_message(prompt)
+
+    # --------------------------------------------------------
+    # 3. Agentic tool loop
+    # --------------------------------------------------------
+
+    for iteration in range(MAX_ITERATIONS):
+
+        print(
+            f"🔄 Agent iteration {iteration + 1}/{MAX_ITERATIONS}"
         )
-        for call, result in zip(function_calls, results)
-    ]
 
-    # for function_response in function_responses:
-    #     print(function_response)
+        # ----------------------------------------------------
+        # No more tools → agent has finished gathering data
+        # ----------------------------------------------------
 
-    contents = [
-        types.Content(
-            role="user",
-            parts=[
-                types.Part.from_text(
-                    text="What's the temperature in Hyderabad, and what is 125 * 48??"
-                )
-            ],
-        ),
-        response.candidates[0].content,
-        types.Content(role="user", parts=function_responses),
-    ]
+        if not response.function_calls:
 
-    final_response = client.models.generate_content(
-        model="gemini-3.5-flash-lite",
-        contents=contents,
-        config=config,
+            print(
+                "🎯 Gemini requested no more tools."
+            )
+
+            break
+
+        print(
+            f"🔧 Gemini requested "
+            f"{len(response.function_calls)} tool call(s)"
+        )
+
+        # ----------------------------------------------------
+        # Execute all requested tools concurrently
+        # ----------------------------------------------------
+
+        results = await asyncio.gather(
+            *(
+                execute_tool_call(call)
+                for call in response.function_calls
+            )
+        )
+
+        # ----------------------------------------------------
+        # Convert tool results into Gemini function responses
+        # ----------------------------------------------------
+
+        function_responses = [
+            types.Part.from_function_response(
+                name=call.name,
+                response=result.model_dump(),
+            )
+            for call, result in zip(
+                response.function_calls,
+                results,
+            )
+        ]
+
+        # ----------------------------------------------------
+        # Send tool results back to Gemini
+        # ----------------------------------------------------
+
+        response = chat.send_message(
+            function_responses
+        )
+
+        print(
+            "✅ Tool results sent back to Gemini.\n"
+        )
+
+    # --------------------------------------------------------
+    # 4. Iteration budget exceeded
+    # --------------------------------------------------------
+
+    else:
+        raise RuntimeError(
+            f"Agent exceeded the maximum "
+            f"of {MAX_ITERATIONS} iterations."
+        )
+
+    # --------------------------------------------------------
+    # 5. Request final structured response
+    # --------------------------------------------------------
+
+    print(
+        "🚀 Requesting structured final response..."
     )
-    print(final_response.text)
+
+    final_response = chat.send_message(
+        "Format the gathered answers according to "
+        "the requested response schema.",
+        config=structured_final_config,
+    )
+
+    # --------------------------------------------------------
+    # 6. Validate final Gemini output with Pydantic
+    # --------------------------------------------------------
+
+    agent_response = AgentResponse.model_validate_json(
+        final_response.text
+    )
+
+    # --------------------------------------------------------
+    # 7. Final result
+    # --------------------------------------------------------
+
+    print(
+        "\n🚀 --- FINAL STRUCTURED AGENT OUTPUT ---"
+    )
+
+    print(agent_response)
 
 
-asyncio.run(main())
+# ============================================================
+# Entry Point
+# ============================================================
+
+if __name__ == "__main__":
+    asyncio.run(main())
