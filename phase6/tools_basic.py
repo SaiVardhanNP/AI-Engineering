@@ -1,17 +1,9 @@
 from pydantic import BaseModel
 from typing import Literal
 import json
-
-
-class CalculatorInput(BaseModel):
-    a: float
-    b: float
-    operation: Literal["addition", "subtraction", "multiplication", "division"]
-
-
-class ToolCall(BaseModel):
-    name: str
-    arguments: CalculatorInput
+from tools_registry import tool_registry
+from tool_dispatcher import tool_dispatcher
+from tool_dispatcher import ToolCall
 
 
 calculator_schema = {
@@ -31,37 +23,6 @@ calculator_schema = {
         "required": ["a", "b", "operation"],
     },
 }
-
-
-def calculator(input: CalculatorInput) -> float:
-    match input.operation.strip():
-        case "addition":
-            return input.a + input.b
-        case "subtraction":
-            return input.a - input.b
-        case "multiplication":
-            return input.a * input.b
-        case "division":
-            if input.b == 0:
-                raise ZeroDivisionError("Denominator cannot be zero")
-            return input.a / input.b
-        case _:
-            raise ValueError("Invalid operation")
-
-
-tool_registry = {"calculator": calculator}
-
-
-def tool_dispatcher(input: ToolCall) -> dict:
-    tool_name = input.name
-
-    tool_function = tool_registry.get(tool_name)
-
-    args = input.arguments
-
-    result = tool_function(args)
-
-    return {"name": tool_name, "result": result}
 
 
 tool_calls = [
