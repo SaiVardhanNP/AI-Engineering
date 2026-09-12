@@ -7,7 +7,7 @@ export default function Composer({ draft, onDraftChange, onSend, disabled, place
   return (
     <div className="flex-none border-t px-7" style={{ borderColor: 'var(--hairline-bar)', paddingTop: '15px', paddingBottom: '20px' }}>
       <div
-        className={`field-underline${focused ? ' is-focused' : ''} flex items-center gap-3 pb-[9px]`}
+        className={`field-underline${focused ? ' is-focused-neutral' : ''} flex items-center gap-3 pb-[9px]`}
         style={{ maxWidth: '640px' }}
       >
         <input

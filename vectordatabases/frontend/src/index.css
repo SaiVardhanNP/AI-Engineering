@@ -123,6 +123,15 @@ button { font-family: inherit; }
   border-bottom-color: var(--accent);
   box-shadow: 0 1px 0 0 var(--accent-35);
 }
+.field-underline.is-focused-neutral {
+  border-bottom-color: var(--control-border);
+}
+
+/* these inputs use the field-underline treatment above as their focus
+   indicator instead of the default outline */
+.field-underline input:focus-visible {
+  outline: none;
+}
 
 .text-link-accent {
   border: 0;
@@ -216,4 +225,24 @@ button { font-family: inherit; }
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+/* slim, theme-matched scrollbars for the video/chat scroll containers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mark) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--mark);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--control-border);
 }
