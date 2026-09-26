@@ -1,6 +1,5 @@
-import { useState } from "react";
-import { AnimatePresence, motion } from "motion/react";
-import { CaretDown, WarningCircle } from "@phosphor-icons/react";
+import { motion } from "motion/react";
+import { WarningCircle } from "@phosphor-icons/react";
 
 const enter = {
   initial: { opacity: 0, y: 12 },
@@ -8,50 +7,77 @@ const enter = {
   transition: { type: "spring", stiffness: 120, damping: 20 },
 };
 
-function Sources({ sources }) {
-  const [open, setOpen] = useState(false);
+const CITATION = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
 
+function CitationChip({ number, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Open source ${number}`}
+      className="mx-0.5 inline-grid size-5 -translate-y-px place-items-center rounded-full bg-emerald-700/10 align-middle text-[11px] font-medium text-emerald-800 transition hover:bg-emerald-700 hover:text-emerald-50 active:scale-[0.94] dark:bg-emerald-400/15 dark:text-emerald-300 dark:hover:bg-emerald-400 dark:hover:text-emerald-950"
+    >
+      <span className="tabular-nums">{number}</span>
+    </button>
+  );
+}
+
+function AnswerText({ text, sources, onCite }) {
+  const nodes = [];
+  let last = 0;
+  let match;
+
+  CITATION.lastIndex = 0;
+
+  while ((match = CITATION.exec(text)) !== null) {
+    const numbers = match[1]
+      .split(",")
+      .map((value) => parseInt(value.trim(), 10))
+      .filter((value) => value >= 1 && value <= sources.length);
+
+    if (numbers.length === 0) continue;
+
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+
+    numbers.forEach((number, index) => {
+      nodes.push(<CitationChip key={`${match.index}-${index}`} number={number} onClick={() => onCite(number - 1)} />);
+    });
+
+    last = match.index + match[0].length;
+  }
+
+  if (last < text.length) nodes.push(text.slice(last));
+
+  return nodes.map((node, index) => (typeof node === "string" ? <span key={`text-${index}`}>{node}</span> : node));
+}
+
+function SourceRow({ sources, activeIndex, onCite }) {
   if (!sources || sources.length === 0) return null;
 
   return (
-    <div className="mt-4">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-200/70 dark:text-zinc-400 dark:hover:bg-zinc-800"
-      >
-        {sources.length}&nbsp;passages used
-        <CaretDown size={12} weight="regular" aria-hidden="true" className={`transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.ol
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.2 }}
-            className="mt-2 divide-y divide-zinc-200 rounded-2xl border border-zinc-200 bg-zinc-50 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900"
-          >
-            {sources.map((source, index) => (
-              <li key={index} className="p-4">
-                <p className="mb-1 font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                  {typeof source.page === "number" ? `Page ${source.page + 1}` : `Passage ${index + 1}`}
-                </p>
-                <p className="line-clamp-6 whitespace-pre-wrap wrap-break-word text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                  {source.text}
-                </p>
-              </li>
-            ))}
-          </motion.ol>
-        )}
-      </AnimatePresence>
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      <span className="text-xs text-zinc-600 dark:text-zinc-400">Sources</span>
+      {sources.map((source, index) => (
+        <button
+          key={index}
+          type="button"
+          onClick={() => onCite(index)}
+          aria-pressed={activeIndex === index}
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition active:scale-[0.98] ${
+            activeIndex === index
+              ? "border-emerald-700 bg-emerald-700/10 text-emerald-800 dark:border-emerald-400 dark:bg-emerald-400/15 dark:text-emerald-300"
+              : "border-zinc-300 hover:bg-zinc-200/70 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          }`}
+        >
+          <span className="font-mono tabular-nums">{index + 1}</span>
+          {typeof source.page === "number" ? `Page ${source.page + 1}` : "Passage"}
+        </button>
+      ))}
     </div>
   );
 }
 
-export default function Message({ message, onRetry }) {
+export default function Message({ message, activeIndex, onRetry, onCite }) {
   if (message.role === "user") {
     return (
       <motion.div {...enter} className="flex justify-end">
@@ -82,10 +108,19 @@ export default function Message({ message, onRetry }) {
     );
   }
 
+  const sources = message.sources || [];
+
   return (
     <motion.div {...enter}>
-      <p className="max-w-[65ch] whitespace-pre-wrap wrap-break-word text-[15px] leading-relaxed">{message.content}</p>
-      <Sources sources={message.sources} />
+      <p className="max-w-[65ch] whitespace-pre-wrap wrap-break-word text-[15px] leading-relaxed">
+        <AnswerText text={message.content} sources={sources} onCite={(index) => onCite(sources, index)} />
+      </p>
+      <SourceRow sources={sources} activeIndex={activeIndex} onCite={(index) => onCite(sources, index)} />
+      {message.model && (
+        <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-400">
+          Answered by <span translate="no">{message.model.label}</span>
+        </p>
+      )}
     </motion.div>
   );
 }

@@ -1,3 +1,9 @@
-.venv
+﻿.venv
 chroma_db
 __pycache__
+.env
+backend/.env
+backend/chroma_db
+backend/uploads
+frontend/node_modules
+frontend/dist

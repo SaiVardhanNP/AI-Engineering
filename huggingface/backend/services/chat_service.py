@@ -4,12 +4,14 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.documents import Document
 from langchain_core.messages import get_buffer_string
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 
 from hybrid_retriever import HybridRetriever
 
 PROMPT = PromptTemplate.from_template("""
 Answer the question using only the provided context.
+Each context passage has a number in square brackets. End every statement with the number of the passage it came from, like this: The course covers RAG systems [2] and agents [3].
 Use the conversation history to understand follow-up questions.
 
 Conversation history:
@@ -30,9 +32,9 @@ class DocumentNotFound(Exception):
 
 
 class ChatService:
-    def __init__(self, vector_store, llm, candidate_k=5, top_k=3, history_window=6):
+    def __init__(self, vector_store, models, candidate_k=5, top_k=3, history_window=6):
         self.vector_store = vector_store
-        self.chain = PROMPT | llm
+        self.models = models
         self.candidate_k = candidate_k
         self.top_k = top_k
         self.bm25_cache = {}
@@ -74,17 +76,23 @@ class ChatService:
             top_k=self.top_k,
         )
 
-    def answer(self, doc_id, question, session_id=None):
+    def answer(self, doc_id, question, session_id=None, model_id=None):
+        model = self.models.describe(model_id)
+        chain = PROMPT | self.models.get(model["id"]) | StrOutputParser()
+
         session_id = session_id or str(uuid.uuid4())
         history = self._history(session_id)
 
         docs = self._retriever(doc_id).invoke(question)
 
-        context = "\n\n".join(doc.page_content for doc in docs)
+        context = "\n\n".join(
+            f"[{number}] {doc.page_content}"
+            for number, doc in enumerate(docs, start=1)
+        )
 
         recent = history.messages[-self.history_window:]
 
-        answer = self.chain.invoke(
+        answer = chain.invoke(
             {
                 "history": get_buffer_string(recent) or "(none)",
                 "context": context,
@@ -97,6 +105,7 @@ class ChatService:
 
         return {
             "session_id": session_id,
+            "model": {"id": model["id"], "label": model["label"], "provider": model["provider"]},
             "answer": answer,
             "sources": [
                 {"page": doc.metadata.get("page"), "text": doc.page_content}

@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar.jsx";
 import Chat from "./components/Chat.jsx";
+
+const SourcePanel = lazy(() => import("./components/SourcePanel.jsx"));
 import { useTheme } from "./useTheme.js";
 import {
   checkHealth,
   clearHistory,
   getHistory,
   listDocuments,
+  listModels,
   sendChat,
   uploadDocument,
 } from "./api.js";
 
 const SESSIONS_KEY = "folio.sessions";
+const MODEL_KEY = "folio.model";
 
 function loadSessions() {
   try {
@@ -42,7 +46,11 @@ export default function App() {
 
   const [threads, setThreads] = useState({});
   const [busy, setBusy] = useState(false);
+  const [citation, setCitation] = useState(null);
+  const [catalog, setCatalog] = useState(null);
+  const [model, setModel] = useState(null);
   const sessions = useRef(loadSessions());
+  const catalogLoaded = useRef(false);
   const lastQuestion = useRef(null);
 
   const refreshDocuments = useCallback(async () => {
@@ -67,6 +75,40 @@ export default function App() {
     });
   }, [refreshDocuments]);
 
+  const loadModels = useCallback(() => {
+    return listModels()
+      .then((result) => {
+        let stored = null;
+        try {
+          stored = localStorage.getItem(MODEL_KEY);
+        } catch {
+          stored = null;
+        }
+        const usable = result.models.some((item) => item.id === stored);
+        catalogLoaded.current = true;
+        setCatalog(result);
+        setModel(usable ? stored : result.default);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadModels();
+  }, [loadModels]);
+
+  function chooseModel(id) {
+    setModel(id);
+    try {
+      localStorage.setItem(MODEL_KEY, id);
+    } catch {
+      // the choice still applies until the page closes
+    }
+  }
+
+  useEffect(() => {
+    setCitation(null);
+  }, [activeId]);
+
   useEffect(() => {
     if (!activeId) return;
     const url = new URL(window.location.href);
@@ -79,6 +121,7 @@ export default function App() {
       try {
         await checkHealth();
         setServerUp(true);
+        if (!catalogLoaded.current) loadModels();
       } catch {
         setServerUp(false);
       }
@@ -138,12 +181,15 @@ export default function App() {
     }));
 
     try {
-      const result = await sendChat({ docId, question, sessionId: sessions.current[docId] });
+      const result = await sendChat({ docId, question, sessionId: sessions.current[docId], model });
       sessions.current[docId] = result.session_id;
       saveSessions(sessions.current);
       setThreads((current) => ({
         ...current,
-        [docId]: [...(current[docId] || []), { role: "assistant", content: result.answer, sources: result.sources }],
+        [docId]: [
+          ...(current[docId] || []),
+          { role: "assistant", content: result.answer, sources: result.sources, model: result.model },
+        ],
       }));
     } catch (error) {
       setThreads((current) => ({
@@ -182,13 +228,22 @@ export default function App() {
     }
 
     setThreads((current) => ({ ...current, [activeId]: [] }));
+    setCitation(null);
+  }
+
+  function openCitation(sources, index) {
+    setCitation({ docId: activeId, sources, index });
   }
 
   const activeDocument = documents.find((document) => document.doc_id === activeId) || null;
   const messages = (activeId && threads[activeId]) || [];
 
   return (
-    <div className="min-h-[100dvh] lg:grid lg:grid-cols-[320px_minmax(0,1fr)]">
+    <div
+      className={`min-h-dvh overflow-x-clip lg:grid lg:grid-cols-[320px_minmax(0,1fr)] ${
+        citation ? "xl:grid-cols-[280px_minmax(0,1fr)_minmax(400px,520px)]" : ""
+      }`}
+    >
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-emerald-700 focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-emerald-50"
@@ -212,11 +267,28 @@ export default function App() {
           document={activeDocument}
           messages={messages}
           busy={busy}
+          citation={citation}
+          catalog={catalog}
+          model={model}
+          onModelChange={chooseModel}
           onAsk={ask}
           onRetry={retry}
           onReset={reset}
+          onCite={openCitation}
         />
       </main>
+      {citation && (
+        <Suspense fallback={null}>
+          <SourcePanel
+            docId={citation.docId}
+            filename={activeDocument ? activeDocument.filename : ""}
+            sources={citation.sources}
+            activeIndex={citation.index}
+            onSelect={(index) => setCitation((current) => (current ? { ...current, index } : current))}
+            onClose={() => setCitation(null)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

@@ -19,6 +19,8 @@ async function request(path, options) {
 
 export const checkHealth = () => request("/health");
 
+export const documentFileUrl = (docId) => `${BASE}/documents/${docId}/file`;
+
 export const listDocuments = () => request("/documents");
 
 export function uploadDocument(file) {
@@ -27,11 +29,13 @@ export function uploadDocument(file) {
   return request("/documents", { method: "POST", body });
 }
 
-export function sendChat({ docId, question, sessionId }) {
+export const listModels = () => request("/models");
+
+export function sendChat({ docId, question, sessionId, model }) {
   return request("/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ doc_id: docId, question, session_id: sessionId }),
+    body: JSON.stringify({ doc_id: docId, question, session_id: sessionId, model }),
   });
 }
 

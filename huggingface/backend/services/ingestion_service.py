@@ -1,4 +1,5 @@
 import hashlib
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -37,6 +38,14 @@ class IngestionService:
             "pages": len(pages),
             "chunks": len(chunks),
         }
+
+    def file_path(self, doc_id):
+        if not re.fullmatch(r"[0-9a-f]{16}", doc_id):
+            return None
+
+        path = self.upload_dir / f"{doc_id}.pdf"
+
+        return path if path.exists() else None
 
     def list_documents(self):
         chunk_counts = defaultdict(int)

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, ArrowCounterClockwise, FilePdf } from "@phosphor-icons/react";
 import Message from "./Message.jsx";
+import ModelMenu from "./ModelMenu.jsx";
 
 const STARTERS = [
   "Summarize this document in a few sentences.",
@@ -68,7 +69,7 @@ function EmptyThread({ onAsk, disabled }) {
   );
 }
 
-function Composer({ document, onAsk, busy }) {
+function Composer({ document, onAsk, busy, catalog, model, onModelChange }) {
   const [value, setValue] = useState("");
   const fieldRef = useRef(null);
 
@@ -88,6 +89,11 @@ function Composer({ document, onAsk, busy }) {
       }}
       className="mx-auto w-full max-w-3xl px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3"
     >
+      {catalog && (
+        <div className="mb-2">
+          <ModelMenu catalog={catalog} value={model} onChange={onModelChange} disabled={busy} />
+        </div>
+      )}
       <div className="flex items-end gap-2 rounded-2xl border border-zinc-300 bg-zinc-50 p-2 transition focus-within:border-emerald-700 focus-within:ring-2 focus-within:ring-emerald-700/30 dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-emerald-400 dark:focus-within:ring-emerald-400/30">
         <label htmlFor="question" className="sr-only">
           Question about {document.filename}
@@ -129,7 +135,19 @@ function Composer({ document, onAsk, busy }) {
   );
 }
 
-export default function Chat({ document, messages, busy, onAsk, onRetry, onReset }) {
+export default function Chat({
+  document,
+  messages,
+  busy,
+  citation,
+  catalog,
+  model,
+  onModelChange,
+  onAsk,
+  onRetry,
+  onReset,
+  onCite,
+}) {
   const endRef = useRef(null);
   const [confirmingReset, setConfirmingReset] = useState(false);
 
@@ -189,6 +207,8 @@ export default function Chat({ document, messages, busy, onAsk, onRetry, onReset
               <Message
                 key={index}
                 message={message}
+                activeIndex={citation && citation.sources === message.sources ? citation.index : null}
+                onCite={onCite}
                 onRetry={message.role === "error" && index === messages.length - 1 ? onRetry : undefined}
               />
             ))}
@@ -198,7 +218,15 @@ export default function Chat({ document, messages, busy, onAsk, onRetry, onReset
         </div>
       )}
 
-      <Composer key={document.doc_id} document={document} onAsk={onAsk} busy={busy} />
+      <Composer
+        key={document.doc_id}
+        document={document}
+        onAsk={onAsk}
+        busy={busy}
+        catalog={catalog}
+        model={model}
+        onModelChange={onModelChange}
+      />
     </div>
   );
 }

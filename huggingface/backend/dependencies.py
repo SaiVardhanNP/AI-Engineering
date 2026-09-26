@@ -1,14 +1,18 @@
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings, HuggingFacePipeline
+from langchain_huggingface import ChatHuggingFace, HuggingFaceEmbeddings, HuggingFacePipeline
 from transformers import pipeline
 
 from services.chat_service import ChatService
 from services.ingestion_service import IngestionService
+from services.model_registry import ModelRegistry
 
 BASE_DIR = Path(__file__).parent
+
+load_dotenv(BASE_DIR / ".env")
 
 
 @lru_cache
@@ -33,7 +37,7 @@ def get_llm():
         return_full_text=False,
     )
 
-    return HuggingFacePipeline(pipeline=pipe)
+    return ChatHuggingFace(llm=HuggingFacePipeline(pipeline=pipe))
 
 
 @lru_cache
@@ -42,5 +46,10 @@ def get_ingestion_service():
 
 
 @lru_cache
+def get_model_registry():
+    return ModelRegistry(get_llm)
+
+
+@lru_cache
 def get_chat_service():
-    return ChatService(get_vector_store(), get_llm())
+    return ChatService(get_vector_store(), get_model_registry())

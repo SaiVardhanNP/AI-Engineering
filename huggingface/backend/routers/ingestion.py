@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from dependencies import get_ingestion_service
@@ -35,3 +36,13 @@ def ingest_document(
 @router.get("", response_model=list[DocumentInfo])
 def list_documents(service=Depends(get_ingestion_service)):
     return service.list_documents()
+
+
+@router.get("/{doc_id}/file")
+def get_document_file(doc_id: str, service=Depends(get_ingestion_service)):
+    path = service.file_path(doc_id)
+
+    if path is None:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(path, media_type="application/pdf")

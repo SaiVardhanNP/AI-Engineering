@@ -1,20 +1,7 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
-import { Check, FilePdf, MoonStars, Sun, UploadSimple } from "@phosphor-icons/react";
-
-function ThemeToggle({ theme, onToggle }) {
-  const Icon = theme === "dark" ? Sun : MoonStars;
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      className="grid size-9 place-items-center rounded-full text-zinc-600 transition hover:bg-zinc-200 active:scale-[0.96] dark:text-zinc-400 dark:hover:bg-zinc-800"
-    >
-      <Icon size={18} weight="regular" aria-hidden="true" />
-    </button>
-  );
-}
+import { Check, FilePdf, UploadSimple } from "@phosphor-icons/react";
+import ThemeToggle from "./ThemeToggle.jsx";
 
 function UploadZone({ onUpload, uploading }) {
   const inputRef = useRef(null);
