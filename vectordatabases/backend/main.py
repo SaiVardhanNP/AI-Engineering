@@ -1,14 +1,13 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-
+from rag_dependencies import rag_service
+from error_messages import to_user_message
+from services.ingestion_service import IngestionService
 from services.transcript_service import TranscriptService
 from services.embedding_service import EmbeddingService
 from services.pinecone_repository import PineconeRepository
-from services.ingestion_service import IngestionService
-from services.rag_service import RAGService
-from geminiClient import client
-
+from services.bm25_repository import BM25Repository
 
 app = FastAPI(title="YouTube RAG API")
 
@@ -18,23 +17,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 transcript_service = TranscriptService()
 embedding_service = EmbeddingService()
 pinecone_repository = PineconeRepository()
-
+bm25_repository = BM25Repository()
 ingestion_service = IngestionService(
     transcript_service=transcript_service,
     embedding_service=embedding_service,
     pinecone_repository=pinecone_repository,
+    bm25_repository=bm25_repository,
 )
-
-rag_service = RAGService(
-    embedding_service=embedding_service,
-    pinecone_repository=pinecone_repository,
-    llm_client=client,
-)
-
 
 class IngestRequest(BaseModel):
     video_id: str
@@ -66,9 +58,16 @@ def ingest(request: IngestRequest):
     try:
         status = ingestion_service.ingest(request.video_id)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        status_code, message = to_user_message(exc)
+        raise HTTPException(
+            status_code=status_code,
+            detail=message,
+        ) from exc
 
-    return IngestResponse(video_id=request.video_id, status=status)
+    return IngestResponse(
+        video_id=request.video_id,
+        status=status,
+    )
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -80,6 +79,10 @@ def query(request: QueryRequest):
             top_k=request.top_k,
         )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        status_code, message = to_user_message(exc)
+        raise HTTPException(
+            status_code=status_code,
+            detail=message,
+        ) from exc
 
     return QueryResponse(**result)

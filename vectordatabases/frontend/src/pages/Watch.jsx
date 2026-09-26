@@ -147,7 +147,7 @@ export default function Watch() {
       });
     } catch (err) {
       setMessages((prev) => {
-        const next = [...prev, { role: 'assistant', text: err.message, sources: [] }];
+        const next = [...prev, { role: 'assistant', text: err.message, sources: [], error: true }];
         setNewMessageIndex(next.length - 1);
         return next;
       });

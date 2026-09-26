@@ -41,7 +41,11 @@ export default function ChatMessage({
         <>
           <div
             className="text-[16.5px] leading-[1.74]"
-            style={{ color: 'var(--ink-body)', textWrap: 'pretty' }}
+            style={{
+              color: message.error ? 'var(--ink-mid)' : 'var(--ink-body)',
+              fontStyle: message.error ? 'italic' : 'normal',
+              textWrap: 'pretty',
+            }}
           >
             {message.text}
           </div>

@@ -8,25 +8,16 @@ class RAGResponse(BaseModel):
 
 
 class RAGService:
-    def __init__(self, embedding_service, pinecone_repository, llm_client):
-        self.embedding_service = embedding_service
-        self.pinecone_repository = pinecone_repository
+    def __init__(self, retriever, llm_client):
+        self.retriever = retriever
         self.llm_client = llm_client
 
     def ask(self, question, video_id, top_k=3):
-        query_embedding = self.embedding_service.embed_query(question)
-
-        search_results = self.pinecone_repository.search(
-            query_embedding,
+        llm_result, search_results = self._run_rag(
+            question,
             video_id,
             top_k,
         )
-
-        context = self._build_context(search_results)
-
-        prompt = self._prompt_builder(context, question)
-
-        llm_result = self._llm_response(prompt)
 
         sources = self._build_sources(
             llm_result.source_ids,
@@ -37,6 +28,39 @@ class RAGService:
             "answer": llm_result.answer,
             "sources": sources,
         }
+
+    def ask_for_evaluation(self, question, video_id, top_k=3):
+        llm_result, search_results = self._run_rag(
+            question,
+            video_id,
+            top_k,
+        )
+
+        return {
+            "answer": llm_result.answer,
+            "contexts": [
+                result["text"]
+                for result in search_results
+            ],
+        }
+
+    def _run_rag(self, question, video_id, top_k):
+        search_results = self.retriever.search(
+            question=question,
+            video_id=video_id,
+            final_k=top_k,
+        )
+
+        context = self._build_context(search_results)
+
+        prompt = self._prompt_builder(
+            context,
+            question,
+        )
+
+        llm_result = self._llm_response(prompt)
+
+        return llm_result, search_results
 
     def _build_context(self, results):
         formatted_chunks = [

@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+label,
+input,
+textarea {
+  touch-action: manipulation;
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-emerald-700);
+    outline-offset: 2px;
+  }
+
+  html.dark :focus-visible {
+    outline-color: var(--color-emerald-400);
+  }
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-emerald-500) 30%, transparent);
+}

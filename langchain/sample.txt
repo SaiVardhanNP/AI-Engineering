@@ -1,0 +1,5 @@
+Artificial intelligence is the field of building systems
+that perform tasks associated with human intelligence.
+
+Machine learning allows systems to learn patterns from data
+rather than relying entirely on explicitly programmed rules.

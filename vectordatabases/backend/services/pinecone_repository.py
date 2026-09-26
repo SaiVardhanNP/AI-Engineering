@@ -43,7 +43,8 @@ class PineconeRepository:
                     },
                 }
                 for chunk_id, (chunk, embedding) in enumerate(
-                    zip(chunks, embeddings), start=1
+                    zip(chunks, embeddings),
+                    start=1,
                 )
             ],
             namespace=video_id,
@@ -58,6 +59,14 @@ class PineconeRepository:
         )
 
     def search(self, query_embedding, video_id, top_k=3):
+        response = self.index.query(
+            vector=query_embedding,
+            include_metadata=True,
+            include_values=True,
+            top_k=top_k,
+            namespace=video_id,
+        )
+
         return [
             {
                 "id": match["id"],
@@ -65,14 +74,20 @@ class PineconeRepository:
                 "start": self._format_timestamp(match.metadata["start"]),
                 "end": self._format_timestamp(match.metadata["end"]),
                 "score": match["score"],
+                "_embedding": match["values"],
             }
-            for match in self.index.query(
-                vector=query_embedding,
-                include_metadata=True,
-                top_k=top_k,
-                namespace=video_id,
-            ).matches
+            for match in response.matches
         ]
+
+    def fetch_embeddings(self, ids, video_id):
+        response = self.index.fetch(
+            ids=ids,
+            namespace=video_id,
+        )
+        return {
+            vector_id: vector["values"]
+            for vector_id, vector in response.vectors.items()
+        }
 
     def _format_timestamp(self, seconds):
         total_seconds = int(seconds)
