@@ -1,5 +1,11 @@
+import os
 import re
 from pathlib import Path
+
+# On Windows a path over 260 characters fails to open unless it starts with this
+# prefix (two backslashes, a question mark, a backslash). Some of the Supabase
+# troubleshooting files have very long names, so a deep project folder hits the limit.
+LONG_PATH_PREFIX = chr(92) * 2 + "?" + chr(92)
 
 FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 HEADING = re.compile(r"^(#{1,3})\s+(.*)$", re.MULTILINE)
@@ -30,7 +36,7 @@ class DocumentLoader:
         return chunks
 
     def load_file(self, path, root):
-        raw = path.read_text(encoding="utf-8")
+        raw = self._read(path)
         title, body = self._split_frontmatter(raw, path)
         body = MDX_NOISE.sub("", body)
         url = self._build_url(path, root)
@@ -49,6 +55,14 @@ class DocumentLoader:
                 )
 
         return chunks
+
+    def _read(self, path):
+        name = str(path.resolve())
+        if os.name == "nt" and not name.startswith(LONG_PATH_PREFIX):
+            name = LONG_PATH_PREFIX + name
+
+        with open(name, encoding="utf-8") as file:
+            return file.read()
 
     def _split_frontmatter(self, raw, path):
         title = path.stem.replace("-", " ").replace("_", " ").title()
