@@ -1,0 +1,64 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/*
+  One theme (dark), one accent (signal), one radius scale.
+  The accent is reserved for real state: an agent working or a check passing.
+*/
+@theme {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+
+  --color-ink-950: #0a0b0d;
+  --color-ink-900: #101216;
+  --color-ink-800: #171a20;
+  --color-ink-700: #22262e;
+  --color-ink-500: #5a6270;
+  --color-ink-300: #98a1b0;
+  --color-ink-100: #dfe3ea;
+
+  --color-signal: #5ef2a8;
+  --color-signal-dim: #1f7a52;
+  --color-alert: #f2776b;
+
+  --radius-ui: 0.75rem;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100dvh;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-950);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-signal);
+  color: var(--color-ink-950);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
