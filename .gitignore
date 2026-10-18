@@ -2,3 +2,5 @@ skills-lock.json
 .vscode
 .claude
 .agents
+# The coding agent has its own repository now: https://github.com/SaiVardhanNP/codewright
+codingagent/
