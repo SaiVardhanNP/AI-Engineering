@@ -1,0 +1,6 @@
+kuzu==0.11.3
+python-dotenv
+langchain-core
+langchain-google-genai
+pydantic
+pytest
